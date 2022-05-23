@@ -1,0 +1,97 @@
+Option Explicit
+
+Sub FormatTheBasics()
+
+    Application.EnableCancelKey = xlDisabled
+
+    Cells.Select
+    With Selection.Font
+        .Name = "Calibri"
+        .Size = 11
+        .Strikethrough = False
+        .Superscript = False
+        .Subscript = False
+        .OutlineFont = False
+        .Shadow = False
+        .Underline = xlUnderlineStyleNone
+        .ColorIndex = 1
+        .TintAndShade = 0
+        .ThemeFont = xlThemeFontMinor
+    End With
+    
+        
+    
+    Range("A1:" & MyColumnLetter(xlLastCol) & "1").Select
+    
+    Selection.Font.Bold = True
+    
+    With Selection.Interior
+        .PatternColorIndex = 2
+        .ThemeColor = xlThemeColorDark1
+        .TintAndShade = -0.149998474074526
+        .PatternTintAndShade = 0
+    End With
+    
+    Selection.AutoFilter
+    
+    Rows("2:2").Select
+    ActiveWindow.FreezePanes = True
+    
+    
+    Cells.Select
+    Cells.EntireColumn.AutoFit
+
+    Columns("A:" & MyColumnLetter(xlLastCol)).Sort key1:=Range("A2"), order1:=xlAscending, Header:=xlYes
+        
+    Range("A2").Select
+
+End Sub
+
+Public Function MyColumnLetter(MyNumber As Long) As String
+    If MyNumber > 26 Then
+        MyColumnLetter = Chr(Int((MyNumber - 1) / 26) + 64) & Chr(((MyNumber - 1) Mod 26) + 65)
+    Else
+        MyColumnLetter = Chr(MyNumber + 64)
+    End If
+End Function
+
+Public Function xlLastCol(Optional WorksheetName As String) As Long 'finds the last populated col in a worksheet
+    If WorksheetName = vbNullString Then WorksheetName = ActiveSheet.Name
+    With Worksheets(WorksheetName)
+        On Error Resume Next
+        xlLastCol = .Cells.Find("*", .Cells(1), xlFormulas, xlWhole, xlByColumns, xlPrevious).Column
+        If Err <> 0 Then xlLastCol = 0
+    End With
+End Function
+
+Sub FindLastRow()
+    Dim sht As Worksheet
+    Dim LastRow As Long
+
+    Set sht = ThisWorkbook.Worksheets(Sheet1.Name)
+
+    'Ctrl + Shift + End
+    LastRow = sht.Cells(sht.Rows.Count, "A").End(xlUp).Row
+
+    'Using UsedRange
+    LastRow = sht.UsedRange.Rows.Count
+
+    'Using Table Range
+    LastRow = sht.ListObjects("Table1").Range.Rows.Count
+
+    'Using Named Range
+    LastRow = sht.Range("MyNamedRange").Rows.Count
+
+    'Ctrl + Shift + Down (Range should be first cell in data set)
+    LastRow = sht.Range("A1").CurrentRegion.Rows.Count
+
+End Sub
+
+Function Contains(objCollection As Object, strName As String) As Boolean
+'Sheets, Shapes, Range, Names, Workbooks, etc.
+    Dim o As Object
+    On Error Resume Next
+    Set o = objCollection(strName)
+    Contains = (Err.Number = 0)
+    Err.Clear
+ End Function

@@ -1,0 +1,327 @@
+Option Explicit
+
+Public Sub MainLoad()
+
+    Dim CurPath As String, CurPathLoad As String, ProjectName As String, CurColumnName As String, ReplaceFrom As String, ReplaceTo As String, CurColumnLetter As String, LoadFileName As String, FinalFileName As String, ExtensionName As String
+    Dim CurLastColumn As String, CurLastRow As Long, CurRowNum As Long, CurRowNumShFormat As Long, LastRow As Long, LastRowL As Long, FirstFilledInRow As Long, CurCellType As String
+    Dim x     As Long, CurCell As Variant, CurRange As Range, CurCellSh As Variant, CurRangeSh As Range
+    Dim wbkM  As Workbook, wbkLoadFile   As Workbook, wbkNewFile   As Workbook
+    Dim wksReportPaths As Worksheet, wksReplaceWords As Worksheet, wksC As Worksheet
+    
+    'more than 1 sheet and if sheet exists
+    
+    Dim TableName As String, ExcelSheetName As String, CurSheetName As String
+    Dim ReportPath As String, MonthlyPath As String, ExcelFileName As String, FinalExcelFileName As String, ExcelTemplate As String, ExcelCopyFrom As String, ExcelPasteTo As String
+    Dim ImportIfAvailable As Long
+    Dim wksSheetsToImport As Worksheet, wksCopyFrom   As Worksheet, wksCopyTo   As Worksheet
+    Dim rngCopyFrom As Range, rngCopyTo As Range
+    Dim FromOffset1 As Long, FromOffset2 As Long, ToOffset1 As Long, ToOffset2 As Long, wbkLoadedFile   As Workbook
+    
+        
+    Application.EnableCancelKey = xlDisabled
+    Application.DisplayAlerts = False
+    Application.EnableEvents = False
+
+    CurPath = ThisWorkbook.Path & "\"
+    CurPathLoad = CurPath & "_Load\"
+    
+    With ThisWorkbook.Sheets("QReportName")
+        ProjectName = .Range("A2").Value
+        LoadFileName = .Range("B2").Value
+        FinalFileName = .Range("C2").Value
+        ExtensionName = .Range("D2").Value
+    End With
+
+    Set wbkM = Workbooks(ProjectName & "Load.xlsm")
+    Set wksReplaceWords = wbkM.Sheets("ReplaceWords")
+    
+    
+    If CheckSheet("QSheetsToImport") = True Then
+    
+        With ThisWorkbook.Sheets("QSheetsToImportFileNames")
+            ExcelFileName = ProjectName & .Range("A2").Value & ".xlsx"
+            FinalExcelFileName = ProjectName & .Range("B2").Value & ".xlsx"
+        End With
+                    
+        Set wbkLoadedFile = Workbooks.Open(CurPathLoad & ExcelFileName)
+        Set wbkLoadedFile = Workbooks(ExcelFileName)
+        
+        Set wbkNewFile = Workbooks.Add
+        wbkNewFile.SaveAs CurPathLoad & FinalExcelFileName
+        Set wbkNewFile = Workbooks(FinalExcelFileName)
+                        
+        Set wksSheetsToImport = wbkM.Sheets("QSheetsToImport")
+
+        CurRowNum = 2
+
+        With wksSheetsToImport
+            LastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+            Set CurRange = .Range("A" & CurRowNum & ":A" & LastRow)
+
+            For Each CurCell In CurRange
+                If CurCell <> "" Then
+            
+                    ExcelSheetName = .Range("B" & CurRowNum).Value
+                    ExcelTemplate = .Range("C" & CurRowNum).Value
+                    ExcelCopyFrom = .Range("D" & CurRowNum).Value
+                    ExcelPasteTo = .Range("E" & CurRowNum).Value
+                    TableName = .Range("F" & CurRowNum).Value
+                    ImportIfAvailable = .Range("G" & CurRowNum).Value
+      
+                    'if ImportIfAvailable=-1 and sheet exists or ImportIfAvailable=0, create it
+                    If (ImportIfAvailable = -1 And WorksheetExists(ExcelSheetName, wbkLoadedFile) = True) Or ImportIfAvailable = 0 Then
+                                       
+                        'just format, there are no templates, but there's a possibility that the first column isn't A1
+                        If ExcelTemplate = "format" Then
+                                                                      
+                            wbkNewFile.Sheets.Add(After:=wbkNewFile.Sheets(wbkNewFile.Sheets.Count)).Name = TableName
+                    
+                            Set wksCopyFrom = wbkLoadedFile.Sheets(ExcelSheetName)
+                            Set wksCopyTo = wbkNewFile.Sheets(TableName)
+    
+                            With wksCopyFrom
+                                'A1 = (1,1)
+                                CurLastColumn = MyColumnLetter(.Range("A1").CurrentRegion.Columns.Count)
+                                CurLastRow = .Cells(Rows.Count, "A").End(xlUp).Row
+                                FromOffset1 = Range(CurLastColumn & CurLastRow).Row + (Range(ExcelCopyFrom).Row - 1)
+                                FromOffset2 = Range(CurLastColumn & CurLastRow).Column + (Range(ExcelCopyFrom).Column - 1)
+                                Set rngCopyFrom = .Range(.Cells(Range(ExcelCopyFrom).Row, Range(ExcelCopyFrom).Column), .Cells(FromOffset1, FromOffset2))
+                                'Set rngCopyFrom = .Range("A1:" & CurLastColumn & CurLastRow)
+                            End With
+            
+                            With wksCopyTo
+                                Set rngCopyTo = .Range("A1:" & CurLastColumn & CurLastRow)
+                            End With
+                        
+                            rngCopyTo.Value = rngCopyFrom.Value
+                        
+                            'format for import
+                            
+                            Set wksC = wbkNewFile.Sheets(TableName)
+             
+                            With wksC
+                                'insert row under header
+                                Rows("2:2").EntireRow.Insert Shift:=xlUp
+        
+                                LastRowL = .Cells(.Rows.Count, "A").End(xlUp).Row
+    
+                                For x = 1 To xlLastCol
+        
+                                    CurColumnLetter = MyColumnLetter(x)
+                                    CurColumnName = StrConv(.Range(CurColumnLetter & "1").Value, vbUpperCase)
+                                    '.Range(CurColumnLetter & "1").Value = StrConv(CurColumnName, vbUpperCase)
+                                    .Range(CurColumnLetter & "1").Value = Left(StrConv(AlphaNumericOnly(CurColumnName), vbUpperCase), 30)
+                                    CurColumnName = StrConv(.Range(CurColumnLetter & "1").Value, vbUpperCase)
+    
+                                    CurRowNumShFormat = 2
+    
+                                    With wksReplaceWords
+                                        LastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+
+                                        Set CurRangeSh = .Range("B" & CurRowNumShFormat & ":B" & LastRow)
+                                        For Each CurCellSh In CurRangeSh
+                                            If CurCellSh <> "" Then
+                
+                                                ReplaceFrom = .Range("A" & CurRowNumShFormat).Value
+                                                ReplaceTo = .Range("B" & CurRowNumShFormat).Value
+ 
+                                                With wksC
+                                                    If InStr(1, CurColumnName, ReplaceFrom, vbTextCompare) > 0 Then
+                                                        .Range(CurColumnLetter & "1").Replace What:=ReplaceFrom, replacement:=ReplaceTo, LookAt:=xlPart, SearchOrder:=xlByRows, MatchCase:=True, MatchByte:=True
+                                                        'wksC.Range(CurColumnLetter & "1").Replace What:=ReplaceFrom, replacement:=ReplaceTo, MatchCase:=True
+                                                    End If
+                                                End With
+    
+                                            End If
+                                            CurRowNumShFormat = CurRowNumShFormat + 1
+                                        Next CurCellSh
+                                    End With
+              
+                                    With wksC
+                                        If maxRangeLength(.Range(CurColumnLetter & "2:" & CurColumnLetter & LastRowL)) > 255 Then
+                                            'to ensure it will import as long text
+                                            .Range(CurColumnLetter & "2").Value = "ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+                                        Else
+                                            'check first filled in row in column, check type, insert data of that type
+                                            If .Range(CurColumnLetter & "3").Value = "" Then
+                                                FirstFilledInRow = .Range(CurColumnLetter & "3").End(xlDown).Row
+                                            Else
+                                                FirstFilledInRow = 3
+                                            End If
+                         
+                        
+                                            If IsDate(.Range(CurColumnLetter & FirstFilledInRow).Value) = True Then
+                                                .Range(CurColumnLetter & "2").Value = "12/31/9999"
+                                                Columns(CurColumnLetter).NumberFormat = "m/d/yyyy"
+'                                                ElseIf IsNumeric(.Range(CurColumnLetter & FirstFilledInRow).Value) = True Then 'this will also mark zipcodes, tins, etc, and if those columns later have dashes, it won't import correctly
+'                                                .Range(CurColumnLetter & "2").Value = "999999999999"
+'                                                Columns(CurColumnLetter).NumberFormat = "###0"
+                                            Else
+                                                .Range(CurColumnLetter & "2").Value = "gggggggggggggggggg"
+                                                Columns(CurColumnLetter).NumberFormat = "@"
+                                            End If
+                                        End If
+                                    End With
+                
+                                Next x
+                            End With
+                                                               
+                            'there's a template in the xlsm file
+                        ElseIf ExcelTemplate Like "T" & ProjectName & "*" Then
+                                        
+                            wbkM.Sheets(ExcelTemplate).Copy After:=wbkNewFile.Sheets(1)
+                            wbkNewFile.Sheets(2).Name = TableName
+                    
+                            Set wksCopyFrom = wbkLoadedFile.Sheets(ExcelSheetName)
+                            Set wksCopyTo = wbkNewFile.Sheets(TableName)
+                                                           
+                            With wksCopyFrom
+                                'A2 = (2,1)
+                                CurLastColumn = MyColumnLetter(xlLastCol)
+                                CurLastRow = .Cells(Rows.Count, "A").End(xlUp).Row
+                                FromOffset1 = Range(CurLastColumn & CurLastRow).Row + (Range(ExcelCopyFrom).Row - 2)
+                                FromOffset2 = Range(CurLastColumn & CurLastRow).Column + (Range(ExcelCopyFrom).Column - 1)
+                                Set rngCopyFrom = .Range(.Cells(Range(ExcelCopyFrom).Row, Range(ExcelCopyFrom).Column), .Cells(FromOffset1, FromOffset2))
+                                'Set rngCopyFrom = .Range("A2:" & CurLastColumn & CurLastRow)
+                            End With
+                         
+                            With wksCopyTo
+                                'A2 = (2,1)
+                                ToOffset1 = Range(CurLastColumn & CurLastRow).Row + (Range(ExcelPasteTo).Row - 2)
+                                ToOffset2 = Range(CurLastColumn & CurLastRow).Column + (Range(ExcelPasteTo).Column - 1)
+                                Set rngCopyTo = .Range(.Cells(Range(ExcelPasteTo).Row, Range(ExcelPasteTo).Column), .Cells(ToOffset1, ToOffset2))
+                                Set rngCopyTo = .Range(.Cells(Range(ExcelPasteTo).Row, Range(ExcelPasteTo).Column), .Cells(ToOffset1, ToOffset2))
+                                'Set rngCopyTo = .Range("A2:" & CurLastColumn & CurLastRow)
+                            End With
+                        
+                            rngCopyTo.Value = rngCopyFrom.Value
+                                                                      
+                        End If
+                        
+                        With wksCopyTo
+                            Application.Goto Reference:=.Range("A1"), Scroll:=True
+                        End With
+            
+                    End If
+                     
+                    Set wksCopyTo = Nothing
+                    Set rngCopyTo = Nothing
+                    Set wksCopyFrom = Nothing
+                    Set rngCopyFrom = Nothing
+                
+                End If
+                
+                CurRowNum = CurRowNum + 1
+            Next CurCell
+        
+        End With
+    
+        If CheckSheet("Sheet1") Then
+            Worksheets("Sheet1").Delete
+        End If
+                
+        wbkNewFile.Save
+        wbkNewFile.Close
+        wbkLoadedFile.Save
+        wbkLoadedFile.Close
+    
+        wbkM.Sheets("QSheetsToImport").Delete
+        wbkM.Sheets("QSheetsToImportFileNames").Delete
+    
+        Set CurCell = Nothing: Set CurRange = Nothing:  Set wbkNewFile = Nothing: Set wksSheetsToImport = Nothing:  Set wksCopyFrom = Nothing: Set wksCopyTo = Nothing
+     
+    Else
+    
+        If ExtensionName = ".csv" Then
+    
+            Set wbkLoadFile = Workbooks.Open(CurPathLoad & LoadFileName, Format:=6, Delimiter:=",")
+            wbkLoadFile.SaveAs CurPathLoad & FinalFileName, xlOpenXMLWorkbook
+        Else
+    
+            Set wbkLoadFile = Workbooks.Open(CurPathLoad & LoadFileName)
+            wbkLoadFile.SaveAs CurPathLoad & FinalFileName
+        End If
+        
+        Set wbkNewFile = Workbooks(FinalFileName)
+    
+    
+        Set wksC = wbkNewFile.Sheets(1)
+             
+        With wksC
+            'insert row under header
+            Rows("2:2").EntireRow.Insert Shift:=xlUp
+        
+            LastRowL = .Cells(.Rows.Count, "A").End(xlUp).Row
+    
+            For x = 1 To xlLastCol
+        
+                CurColumnLetter = MyColumnLetter(x)
+                CurColumnName = StrConv(.Range(CurColumnLetter & "1").Value, vbUpperCase)
+                '.Range(CurColumnLetter & "1").Value = StrConv(CurColumnName, vbUpperCase)
+                .Range(CurColumnLetter & "1").Value = Left(StrConv(AlphaNumericOnly(CurColumnName), vbUpperCase), 30)
+                CurColumnName = StrConv(.Range(CurColumnLetter & "1").Value, vbUpperCase)
+    
+                CurRowNum = 2
+    
+                With wksReplaceWords
+                    LastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+
+                    Set CurRange = .Range("B" & CurRowNum & ":B" & LastRow)
+                    For Each CurCell In CurRange
+                        If CurCell <> "" Then
+                
+                            ReplaceFrom = .Range("A" & CurRowNum).Value
+                            ReplaceTo = .Range("B" & CurRowNum).Value
+ 
+                            With wksC
+                                If InStr(1, CurColumnName, ReplaceFrom, vbTextCompare) > 0 Then
+                                    .Range(CurColumnLetter & "1").Replace What:=ReplaceFrom, replacement:=ReplaceTo, LookAt:=xlPart, SearchOrder:=xlByRows, MatchCase:=True, MatchByte:=True
+                                    'wksC.Range(CurColumnLetter & "1").Replace What:=ReplaceFrom, replacement:=ReplaceTo, MatchCase:=True
+                                End If
+                            End With
+    
+                        End If
+                        CurRowNum = CurRowNum + 1
+                    Next CurCell
+                End With
+              
+                With wksC
+                    If maxRangeLength(.Range(CurColumnLetter & "2:" & CurColumnLetter & LastRowL)) > 255 Then
+                        'to ensure it will import as long text
+                        .Range(CurColumnLetter & "2").Value = "ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+                    Else
+                        'check first filled in row in column, check type, insert data of that type
+                        If .Range(CurColumnLetter & "3").Value = "" Then
+                            FirstFilledInRow = .Range(CurColumnLetter & "3").End(xlDown).Row
+                        Else
+                            FirstFilledInRow = 3
+                        End If
+                         
+                        
+                        If IsDate(.Range(CurColumnLetter & FirstFilledInRow).Value) = True Then
+                            .Range(CurColumnLetter & "2").Value = "12/31/9999"
+                            Columns(CurColumnLetter).NumberFormat = "m/d/yyyy"
+                        Else
+                            .Range(CurColumnLetter & "2").Value = "gggggggggggggggggg"
+                            Columns(CurColumnLetter).NumberFormat = "@"
+                        End If
+                    End If
+                End With
+                
+            Next x
+        End With
+
+        wbkNewFile.Save
+        wbkNewFile.Close
+        Set wbkNewFile = Nothing
+    
+    End If
+    
+    
+    
+    wbkM.Sheets("QReportName").Delete
+    wbkM.Save
+    Set wbkM = Nothing
+
+End Sub
+

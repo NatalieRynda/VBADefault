@@ -1,0 +1,298 @@
+Option Explicit
+
+Public Sub MainProcedure()
+
+    Dim FormattedDate As String, RunDate As Date
+
+    Dim ReportPath As String, MonthlyPath As String, CurPath As String, ProjectName As String, ExcelFileName As String, FinalExcelFileName As String, ExcelTemplate As String, ExcelPasteTo As String, ExtensionName As String, QueryName As String, CellsToPasteAsValues As String
+    Dim CurLastColumn As String, CurLastRow As Long, InsertRowsOnTemplate As Long, CountOfRowsInTable As Long, CurRowCt As Long, RowsOnTemplate As Long
+    
+    Dim TableName As String, TemplateFileName As String, SheetToSelect As String, ExcelSheetName As String, CurSheetName As String
+    
+    Dim CurRowNum As Long, LastRow As Long, FirstRowOfSection As Long, LastRowOfSection As Long
+    Dim i     As Integer, CurCell As Variant, CurRange As Range
+    Dim wbkM  As Workbook, wbkNewFile   As Workbook
+    Dim wksReportDates As Worksheet, wksFilesToExportEMail  As Worksheet, wksCopyFrom   As Worksheet, wksCopyTo   As Worksheet, wks3  As Worksheet, wks4   As Worksheet, wks5  As Worksheet
+    Dim rngCopyFrom As Range, rngCopyTo As Range, rngFilesToExportEMail As Range, rngInsertRowsTemplate As Range
+    Dim Offset1 As Long, Offset2 As Long
+    
+        
+    Application.EnableCancelKey = xlDisabled
+    Application.DisplayAlerts = False
+    Application.EnableEvents = False
+
+    CurPath = ThisWorkbook.Path & "\"
+    CurRowNum = 2
+    
+    With ThisWorkbook.Sheets("QReportDates")
+        FormattedDate = .Range("A2").Value
+        RunDate = .Range("B2").Value
+        ReportPath = .Range("C2").Value
+        MonthlyPath = .Range("D2").Value
+        ProjectName = .Range("E2").Value
+    End With
+    
+
+    Set wbkM = Workbooks(ProjectName & ".xlsm")
+    Set wksReportDates = wbkM.Sheets("QReportDates")
+    Set wksFilesToExportEMail = wbkM.Sheets("QFilesToExportXLSX")
+    
+    With wksFilesToExportEMail
+        LastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+    
+        Set CurRange = .Range("B" & CurRowNum & ":B" & LastRow)
+
+        For Each CurCell In CurRange
+            If CurCell <> "" Then
+  
+                ExcelFileName = .Range("B" & CurRowNum).Value
+                FinalExcelFileName = .Range("B" & CurRowNum).Value & .Range("I" & CurRowNum).Value
+                LastRowOfSection = .Range("B" & CurRowNum & ":B" & LastRow).Find(What:=ExcelFileName, LookIn:=xlValues, LookAt:=xlWhole, SearchOrder:=xlByRows, SearchDirection:=xlPrevious, MatchCase:=False, SearchFormat:=False).Row
+                'FirstRowOfSection = Sheets("QFilesToExportXLSX").Range("B" & CurRowNum & ":B" & LastRow).Find(what:=ExcelFileName).Row
+                TemplateFileName = .Range("F" & CurRowNum).Value
+                FirstRowOfSection = .Columns(2).Find(ExcelFileName).Row
+                TableName = .Range("A" & CurRowNum).Value
+                ExcelSheetName = .Range("C" & CurRowNum).Value
+                ExtensionName = .Range("I" & CurRowNum).Value
+                
+                If IsNull(TemplateFileName) Or TemplateFileName = "" Then
+                    Set wbkNewFile = Workbooks.Add
+                Else
+                    Set wbkNewFile = Workbooks.Open(CurPath & TemplateFileName)
+                End If
+                                       
+                wbkNewFile.SaveAs MonthlyPath & FinalExcelFileName
+                
+                Set wbkNewFile = Workbooks(FinalExcelFileName)
+                                   
+                For i = CurRowNum To LastRowOfSection
+                                                                                 
+                    With wksFilesToExportEMail
+                        TableName = .Range("A" & i).Value
+                        ExcelSheetName = .Range("C" & i).Value
+                        ExcelTemplate = .Range("D" & i).Value
+                        ExcelPasteTo = .Range("E" & i).Value
+                        QueryName = .Range("M" & i).Value
+                        CellsToPasteAsValues = .Range("N" & i).Value
+                        InsertRowsOnTemplate = .Range("O" & i).Value
+                        CountOfRowsInTable = .Range("P" & i).Value
+                        RowsOnTemplate = .Range("Q" & i).Value - 1
+                        
+                    End With
+                                                        
+                    If ExcelSheetName = "" Then
+                        ExcelSheetName = TableName
+                    End If
+                    
+                    If QueryName <> "" Then
+                        TableName = QueryName
+                    End If
+                                       
+                    'exported from access, formatted. no templates, no state supplied files, etc
+                    If ExcelTemplate = "format" Then
+                                                                      
+                        wbkNewFile.Sheets.Add(After:=wbkNewFile.Sheets(wbkNewFile.Sheets.Count)).Name = ExcelSheetName
+                    
+                        Set wksCopyFrom = wbkM.Sheets(TableName)
+                        Set wksCopyTo = wbkNewFile.Sheets(ExcelSheetName)
+    
+                        With wksCopyFrom
+                            CurLastColumn = MyColumnLetter(.Range("A1").CurrentRegion.Columns.Count)
+                            CurLastRow = .Cells(Rows.Count, "A").End(xlUp).Row
+                            Set rngCopyFrom = .Range("A1:" & CurLastColumn & CurLastRow)
+                        End With
+            
+                        With wksCopyTo
+                            Set rngCopyTo = .Range("A1:" & CurLastColumn & CurLastRow)
+                        End With
+                        
+                        rngCopyTo.Value = rngCopyFrom.Value
+                        
+                        FormatTheBasics
+                        
+                        'state supplied template
+                    ElseIf ExcelTemplate = "" Then
+                    
+                        Set wksCopyFrom = wbkM.Sheets(TableName)
+                        Set wksCopyTo = wbkNewFile.Sheets(ExcelSheetName)
+                                                                       
+                        With wksCopyFrom
+                            CurLastColumn = MyColumnLetter(.Range("A1").CurrentRegion.Columns.Count)
+                            CurLastRow = .Cells(Rows.Count, "A").End(xlUp).Row
+                            Set rngCopyFrom = .Range("A2:" & CurLastColumn & CurLastRow)
+                        End With
+                                                                      
+                        With wksCopyTo
+                            'A2 = (2,1)
+                            Offset1 = Range(CurLastColumn & CurLastRow).Row + (Range(ExcelPasteTo).Row - 2)
+                            Offset2 = Range(CurLastColumn & CurLastRow).Column + (Range(ExcelPasteTo).Column - 1)
+                            Set rngCopyTo = .Range(.Cells(Range(ExcelPasteTo).Row, Range(ExcelPasteTo).Column), .Cells(Offset1, Offset2))
+                                                                      
+                        End With
+                        
+                        rngCopyTo.Value = rngCopyFrom.Value
+                                                               
+                        'there's a template in the xlsm file
+                    ElseIf ExcelTemplate Like "T" & ProjectName & "*" Then
+                                        
+                        wbkM.Sheets(ExcelTemplate).Copy After:=wbkNewFile.Sheets(1)
+                        wbkNewFile.Sheets(2).Name = ExcelSheetName
+                    
+                        Set wksCopyFrom = wbkM.Sheets(TableName)
+                        Set wksCopyTo = wbkNewFile.Sheets(ExcelSheetName)
+                                                           
+                        
+                        If InsertRowsOnTemplate = -1 Then
+                            If CountOfRowsInTable > RowsOnTemplate Then
+                                With wksCopyTo
+                                    CurRowCt = CountOfRowsInTable
+                                    Do While CurRowCt > (RowsOnTemplate + 1)
+                                
+                                        Set rngCopyTo = .Rows(RowsOnTemplate)
+                                        rngCopyTo.Copy
+                                        rngCopyTo.Offset(5).Insert Shift:=xlDown
+                                        Application.CutCopyMode = False
+        
+                                        CurRowCt = CurRowCt - 1
+                                    Loop
+                                End With
+                            End If
+                        End If
+                            
+                            
+                            With wksCopyFrom
+                                CurLastColumn = MyColumnLetter(xlLastCol)
+                                CurLastRow = .Cells(Rows.Count, "A").End(xlUp).Row
+                                Set rngCopyFrom = .Range("A2:" & CurLastColumn & CurLastRow)
+                            End With
+                         
+                            With wksCopyTo
+                                'A2 = (2,1)
+                                Offset1 = Range(CurLastColumn & CurLastRow).Row + (Range(ExcelPasteTo).Row - 2)
+                                Offset2 = Range(CurLastColumn & CurLastRow).Column + (Range(ExcelPasteTo).Column - 1)
+                                Set rngCopyTo = .Range(.Cells(Range(ExcelPasteTo).Row, Range(ExcelPasteTo).Column), .Cells(Offset1, Offset2))
+                            End With
+                        
+                            rngCopyTo.Value = rngCopyFrom.Value
+                        
+                            If ProjectName = "GAStateFacs" Then
+                                Dim SearchString As String, FirstFound As String
+                                Dim SearchRange As Range, cl As Range, sh As Worksheet
+                            
+                                SearchString = "N/A"
+                                Application.FindFormat.Clear
+                                For Each sh In ActiveWorkbook.Worksheets
+                                    Set cl = sh.Cells.Find(What:=SearchString, After:=sh.Cells(1, 1), LookIn:=xlValues, LookAt:=xlPart, SearchOrder:=xlByRows, SearchDirection:=xlNext, MatchCase:=False, SearchFormat:=False)
+                                    If Not cl Is Nothing Then
+                                        FirstFound = cl.Address
+                                        Do
+                                            cl.Font = "Calibri"
+                                            cl.Interior.ColorIndex = 3
+                                            Set cl = sh.Cells.FindNext(After:=cl)
+                                        Loop Until FirstFound = cl.Address
+                                    End If
+                                Next
+
+                                Dim strF As String, strR As String, strAdd As String
+                                Dim WS As Worksheet, rng As Range
+                            
+                                strF = "ü"
+                                strR = "û"
+                                For Each WS In Worksheets
+                                    Set rng = WS.Cells.Find(What:=strF, LookAt:=xlWhole)
+                                    If Not rng Is Nothing Then
+                                        strAdd = rng.Address
+                                        Do
+                                            rng.Value = strR
+                                            rng.Font.ColorIndex = 10
+                                            Set rng = WS.Cells.FindNext(After:=rng)
+                                        Loop While Not rng Is Nothing
+                                    End If
+                                Next WS
+                            End If
+                        
+                            If CellsToPasteAsValues <> "" Then
+                                With wksCopyTo
+                                    Set rngCopyFrom = .Range(CellsToPasteAsValues)
+                                    Set rngCopyTo = .Range(CellsToPasteAsValues)
+                                End With
+                                rngCopyTo.Value = rngCopyFrom.Value
+                            End If
+                                                                      
+                    End If
+                        
+                    If ExcelTemplate <> "" Then
+                        With wksCopyTo
+                            Application.Goto Reference:=.Range("A1"), Scroll:=True
+                        End With
+                    End If
+
+                                                        
+                Next i
+                                                                 
+                If LastRowOfSection < LastRow Then
+                    CurRowNum = LastRowOfSection + 1
+                Else
+                    CurRowNum = LastRowOfSection
+                End If
+            
+            End If
+    
+    
+            If CheckSheet("Sheet1") Then
+                Worksheets("Sheet1").Delete
+            End If
+            
+            wbkNewFile.Save
+            wbkNewFile.Close
+            Set wbkNewFile = Nothing
+            Set wksCopyTo = Nothing
+            Set rngCopyTo = Nothing
+            Set wksCopyFrom = Nothing
+            Set rngCopyFrom = Nothing
+            
+            If LastRowOfSection >= LastRow Then
+                Exit For
+            End If
+        Next CurCell
+
+        CurSheetName = ""
+        
+        'delete imported sheets
+        Dim rrow As Object
+        
+        With wksFilesToExportEMail
+            LastRow = .Cells(.Rows.Count, "A").End(xlUp).Row
+
+            Set rngFilesToExportEMail = .Range("A2:A" & LastRow)
+ 
+            For Each rrow In rngFilesToExportEMail
+ 
+                TableName = .Range("A" & rrow.Row).Value
+                QueryName = .Range("M" & rrow.Row).Value
+                    
+                If QueryName <> "" Then
+                    TableName = QueryName
+                End If
+                        
+                Dim oSheet As Excel.Worksheet
+                      
+                For Each oSheet In wbkM.Sheets
+                    If oSheet.Name = TableName Then
+                        wbkM.Worksheets(TableName).Delete
+                        Exit For
+                    End If
+                Next oSheet
+ 
+            Next rrow
+        End With
+        
+    End With
+    
+    wbkM.Worksheets("QFilesToExportXLSX").Delete
+    wbkM.Worksheets("QReportDates").Delete
+    wbkM.Save
+    
+    Set CurCell = Nothing: Set CurRange = Nothing: Set wbkM = Nothing: Set wbkNewFile = Nothing: Set wksReportDates = Nothing: Set wksFilesToExportEMail = Nothing: Set wksCopyFrom = Nothing: Set wksCopyTo = Nothing
+End Sub
+
